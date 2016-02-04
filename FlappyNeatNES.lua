@@ -7,19 +7,19 @@ MaxNodes = 16000; -- the maximal amount of nodes
 
 WeightMutChance = 0.8; -- the chance for the weights to be changed
 NewWeightChance = 0.1; -- the chance for a weight to be completely new
-WeightLrngRate = 0.1; -- the step size of the weight changes
+WeightLrngRate = 0.01; -- the step size of the weight changes
 NewConnectChance = 0.03; -- the chance for a new connection
 NewNodeChance = 0.05; -- the chance for a new node
 DisableChance = 0.05; -- the chance for an aktive connection to get disabled
 EnableChance = 0.25; -- the chance for an inaktive connection to get enabled
 ChanceCrossover = 0.75; -- the chance for breeding to not be asexual
-CoeffDisjointExcess = 2.0;  -- coefficient used during distance calculation. The amount of disjoint and excess nodes is multiplied with it
-CoeffWeightDiff = 0.4; -- coefficient used during distance calculation. The average weight difference between shared connections is multiplied with it
-DistanceTresh = 1.0; -- the distance treshold. Distances above it mean that two genomes belong to separate species
+CoeffDisjointExcess = 0.05;  -- coefficient used during distance calculation. The amount of disjoint and excess nodes is multiplied with it
+CoeffWeightDiff = 1.0; -- coefficient used during distance calculation. The average weight difference between shared connections is multiplied with it
+DistanceThresh = 0.1; -- the distance treshold. Distances above it mean that two genomes belong to separate species
 SigmoidInHL = true; -- this determines whether the sigmoid function is only used for the output node or also for the hidden layer nodes
-BreedersPercentage = 0.7; -- this sets the percentage of genomes, per species, that get to breed (Values should not exceed 1.0)
-JumpTresh = 0.0; -- the treshold at which an output leads to a jump
-WeightRange = 2; -- the (new) random connection weights range from -WeightRange/2 to WeightRange/2
+BreedersPercentage = 0.2; -- this sets the percentage of genomes, per species, that get to breed (Values should not exceed 1.0)
+JumpThresh = 0.0; -- the threshold at which an output leads to a jump
+WeightRange = 1; -- the (new) random connection weights range from -WeightRange/2 to WeightRange/2
 
 --Global Variables (Do not change these!)
 innovation = Inputs; -- innovation at start
@@ -49,7 +49,7 @@ function getInputs()
 		nextPipeHeight = pipeHeight;
 	end
 	
-	if pipeHeight ~= nextPipeHeight and xPipeRAM >= 190 and xPipeRAM <= 200 then
+	if pipeHeight ~= nextPipeHeight and xPipeRAM >= 200 and xPipeRAM <= 210 then
 		pipeHeight = nextPipeHeight;
 	end
 	
@@ -602,7 +602,7 @@ end
 function matchingSpecies(genome1, genome2) -- determines whether two genomes belong to the same species
 	local n = math.max(#genome1.connections, #genome2.connections); -- the maximum amount of connections in the genomes
 	local distance = (CoeffDisjointExcess * DisjointExcessCount(genome1, genome2) / n) + (CoeffWeightDiff * getAvgWeightDiff(genome1, genome2)); -- the distance between both connections (Formula was taken from the paper.)
-	if distance > DistanceTresh then -- if the distance is greater than our treshold, then the genomes aren't members of the same species
+	if distance > DistanceThresh then -- if the distance is greater than our threshold, then the genomes aren't members of the same species
 		return false;
 	else -- else, both genomes are members of the same species
 		return true;
@@ -668,10 +668,10 @@ function newGeneration(population) -- create a new generation of genomes
 	population.generation = population.generation + 1; -- increments the population's generation number by one
 end
 
-console.clear();
+
 table = joypad.get(1);
-table["Start"] = true; -- "Start" ist der Startknopf
-joypad.set(table, 1);
+table["start"] = true; -- "Start" ist der Startknopf
+joypad.set(1, table);
 emu.frameadvance(); -- Start auf Titelbildschirm drücken
 
 local pop = newPopulation(); -- creates a new population
@@ -682,6 +682,9 @@ for g = 1, Population do -- create as many first gen genomes as the population's
 end
 
 while true do -- plays the game
+	local avgFitnessGen = 0; -- the average fitness of the current generation
+	local highscoreGen = 0; -- the highscore of the current generation (points)
+	local highscoreGenFit = 0.0; -- the highscore of the current generation (fitness)
 	for s = 1, #pop.species do -- goes through all the species
 		local species = pop.species[s]; -- the current species
 		local genomesSpecies = #species.genomes; -- the amount of genomes of the current species
@@ -691,11 +694,12 @@ while true do -- plays the game
 			genome.fitness = 0; -- resets the genome's fitness, for genomes that transcend generations
 			getNetwork(genome); -- creates the genome's network
 			local lostGame = false; -- is used to determine whether the current genome lost a game
-			for i = 1, 5 do -- play three times per genome
-				table["Start"] = true; -- starts the game again after a loss
-				joypad.set(table, 1);
+			for i = 1, 5 do -- play five times per genome
+				table["start"] = true; -- starts the game again after a loss
+				joypad.set(1, table);
 				emu.frameadvance();
 				emu.frameadvance();
+				local framesGame = 0; -- the amount of frames of the current game (isn't entirely accurate but serves its purpose)
 		
 				while lostGame == false do -- while the genome hasn't lost
 					local unitsRAMOld = memory.readbyte(0x0041); -- Punkte
@@ -705,31 +709,36 @@ while true do -- plays the game
 					local xPipeRAMOld = memory.readbyte(0x0045); -- Position der R�hre
 					local yBirdRAMOld = memory.readbyte(0x003F); -- the bird's height. Values range from 10 (highest) to 185 (lowest)
 					
-					local output = calcOutputNet(genome.network); -- calculates the output
-					if output > JumpTresh or fitness < 15 then -- if the output is greater than a treshold or the fitness is smaller than 15 (the first 15 moves have to be jumps or the game gets stuck in the starting screen)
-						table["A"] = true; -- A leads to a jump
-						joypad.set(table, 1);
+					if pointsOld > highscoreGen then
+						highscoreGen = pointsOld;
 					end
+					
+					local output = calcOutputNet(genome.network); -- calculates the output
+					if output > JumpThresh or framesGame < 15 then -- if the output is greater than a threshold or the fitness is smaller than 15 (the first 15 moves have to be jumps or the game gets stuck in the starting screen)
+						table["A"] = true; -- A leads to a jump
+						joypad.set(1, table);
+					end
+					
 					gui.text(10,10,"Generation:" .. pop.generation);
 					gui.text(10,30,"Species:" .. s);
 					gui.text(10,50,"Genome:" .. g);
 					gui.text(10,70,"Genomes in Species:" .. genomesSpecies);
-					gui.text(10,90, "Maximal rank:" .. genome.network.nodes[MaxNodes + Outputs].rank);
+					gui.text(10,90, "Highscore:" .. highscoreGen);
 					gui.text(10,110, "Pipe height:" .. pipeHeight);
 					gui.text(10,130, "Bird height:" .. yBirdRAMOld);
-					gui.text(10,150, "Iteration:" .. i);
-					gui.text(10,170, "Dist pipe:" .. xPipeRAMOld);
+					gui.text(10,170, "Iteration:" .. i);
+					gui.text(10,150, "Dist pipe:" .. xPipeRAMOld);
 					emu.frameadvance();
 					
 					gui.text(10,10,"Generation:" .. pop.generation);
 					gui.text(10,30,"Species:" .. s);
 					gui.text(10,50,"Genome:" .. g);
 					gui.text(10,70,"Genomes in Species:" .. genomesSpecies);
-					gui.text(10,90, "Maximal rank:" .. genome.network.nodes[MaxNodes + Outputs].rank);
+					gui.text(10,90, "Highscore:" .. highscoreGen);
 					gui.text(10,110, "Pipe height:" .. pipeHeight);
 					gui.text(10,130, "Bird height:" .. yBirdRAMOld);
-					gui.text(10,150, "Iteration:" .. i);
-					gui.text(10,170, "Dist pipe:" .. xPipeRAMOld);
+					gui.text(10,170, "Iteration:" .. i);
+					gui.text(10,150, "Dist pipe:" .. xPipeRAMOld);
 					emu.frameadvance();
 					
 					local unitsRAMNew = memory.readbyte(0x0041); -- Punkte
@@ -738,24 +747,44 @@ while true do -- plays the game
 					local pointsNew = hundredsRAMNew * 100 + tensRAMNew * 10 + unitsRAMNew;
 					local xPipeRAMNew = memory.readbyte(0x0045); -- Position der R�hre
 					local yBirdRAMNew = memory.readbyte(0x003F);
+					
+					if pointsNew > highscoreGen then
+						highscoreGen = pointsNew;
+					end
+					
 					if pointsNew > pointsOld then -- if the bird passed a pipe store the height of the next pipe and reward the game by an extra 100 fitness points
 						local pipeHeightMod = memory.readbyte(0x003B);
 						nextPipeHeight = 94 + pipeHeightMod * 16;
 						fitness = fitness + 100;
 					end
-					if ((pointsNew <= pointsOld and xPipeRAMNew < xPipeRAMOld) or (yBirdRAMOld >= 177 or yBirdRAMNew >= 177)) and fitness > 10 then -- the current game was lost
+					if ((pointsNew <= pointsOld and xPipeRAMNew < xPipeRAMOld) or (yBirdRAMOld >= 177 or yBirdRAMNew >= 177)) and framesGame > 10 then -- the current game was lost
 						lostGame = true; -- set lostGAme to true, so we exit the while-loop and start the next game
 						genome.fitness = genome.fitness + fitness; -- add the fitness of the current game to the genome's fitness
 						fitness = 0; -- reset the fitness, so the next game starts at zero again
 						pipeHeight = 0; -- reset the pipe height
 					else
-						fitness = fitness + 1; -- if the game wasn't lost, increase the current fitness by one
+						framesGame = framesGame + 1; -- if the game wasn't lost, increase the current frames count by one
+						if yBirdRAMNew > 10  then
+							fitness = fitness + 1; -- if the game wasn't lost and the bird isn't outside of the screen, increase the current fitness by one
+						end
 					end			
 				end
 				lostGame = false; -- set lost game to false again, so the next loop doesn't terminate prematurely			
 			end		
 			genome.fitness = genome.fitness / 5; -- after the genome hast lost five games, divide the fitness by 5 to get the genome's average fitness per game
+			if genome.fitness > highscoreGenFit then
+				highscoreGenFit = genome.fitness;
+			end
+			avgFitnessGen = avgFitnessGen + genome.fitness; -- adds the current genome's fitness to the generation's average fitness
 		end
 	end
+	avgFitnessGen = avgFitnessGen / Population; -- divides the fitness summ by the size of the population
+	local file = io.open("results.txt", "a");
+	file:write("Generation:" .. pop.generation);
+	file:write("\nAverage Fitness:" .. avgFitnessGen);
+	file:write("\nHighscore (Points):" .. highscoreGen);
+	file:write("\nHighscore (Fitness):" .. highscoreGenFit);
+	file:write("\n");
+	file:close();
 	newGeneration(pop); -- after all genomes of the current generation are done playing, create a new generation and start again
 end
