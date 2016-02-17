@@ -24,6 +24,7 @@ WeightRange = 1; -- the (new) random connection weights range from -WeightRange/
 --Global Variables (Do not change these!)
 innovation = Inputs; -- innovation at start
 maxnode = Inputs; -- max node, excluding the ouput node, at start
+speciesIDs = 0; -- allows us to add an unique ID to each species
 pipeHeight = 0; -- used to calculate the height difference between the bird and the pipe
 nextPipeHeight = 0; -- used to calculate the height difference between the bird and the pipe
 
@@ -157,6 +158,7 @@ function newSpecies()
 	species.genomes = {}; -- the genomes that are members of this species
 	species.maxFitness = 0.0; -- the maximal fitness of the species. Can be used to calculate the staleness of a species, which we don't do
 	species.avgFitness = 0.0; -- the average fitness of a species. Used to calculate the amount of offspring that a species is entitled to
+	species.id = 0; -- the ID of the species
 	
 	return species
 end
@@ -173,6 +175,12 @@ function newInnov()
 	innovation = innovation + 1; -- the innovation number of the latest innovation
 	
 	return innovation;
+end
+
+function newID()
+	speciesIDs = speciesIDs + 1; -- the innovation number of the latest innovation
+	
+	return speciesIDs;
 end
 	
 function newMaxNode()
@@ -537,7 +545,7 @@ function removeWeakSpecies(population) -- removes weak species (Those whose aver
 	  
 	for s = 1, #population.species do -- goes through all the species
 		local species = population.species[s]; -- the current species
-		if math.floor((species.avgFitness / ttlAvgFitness) * Population) >= 0 then -- if the average fitness divided by the total average fitness and multiplied by the population size is greater or equal to one
+		if math.floor((species.avgFitness / ttlAvgFitness) * Population) > 0 then -- if the average fitness divided by the total average fitness and multiplied by the population size is greater or equal to one
 			strongSpecies[#strongSpecies + 1] = species; -- the species receives at least one offspring, so it may survive
 		end 
 	end
@@ -626,6 +634,7 @@ function insertIntoSpecies(genome, population) -- inserts a genome into the firs
 	if speciesIdentified == false then -- if none of the species were a match (or no species exists)
 		local newSpecies = newSpecies(); -- create a new species
 		newSpecies.genomes[1] = genome; -- add the genome to the new species
+		newSpecies.id = newID();
 		population.species[#population.species + 1] = newSpecies; -- add the species to the population's species list
 	end
 end
@@ -685,9 +694,13 @@ while true do -- plays the game
 	local avgFitnessGen = 0; -- the average fitness of the current generation
 	local highscoreGen = 0; -- the highscore of the current generation (points)
 	local highscoreGenFit = 0.0; -- the highscore of the current generation (fitness)
+	local filePop = io.open("population.txt", "a");
+	filePop:write("Generation:" .. pop.generation);
 	for s = 1, #pop.species do -- goes through all the species
 		local species = pop.species[s]; -- the current species
 		local genomesSpecies = #species.genomes; -- the amount of genomes of the current species
+		filePop:write("\nSpecies:" .. species.id);
+		filePop:write("\nGenomes:" .. genomesSpecies);
 		for g = 1, #species.genomes do -- goes through all the genomes in the current species
 			local fitness = 0; -- the fitness of the current genome
 			local genome = species.genomes[g]; -- the current genome
@@ -786,5 +799,7 @@ while true do -- plays the game
 	file:write("\nHighscore (Fitness):" .. highscoreGenFit);
 	file:write("\n");
 	file:close();
+	filePop:write("\n");
+	filePop:close();
 	newGeneration(pop); -- after all genomes of the current generation are done playing, create a new generation and start again
 end
